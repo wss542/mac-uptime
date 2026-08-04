@@ -4,8 +4,6 @@ repo: mac-uptime
 sites:
   - name: Mac VM
     url: https://qwq.tail6e5b10.ts.net
-  - name: Test Down
-    url: https://this-site-does-not-exist-at-all.invalid
 
 assignees:
   - wss542
