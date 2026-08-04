@@ -16,23 +16,5 @@
     "timeMonth": 2162,
     "timeYear": 2162,
     "dailyMinutesDown": {}
-  },
-  {
-    "name": "Test Down",
-    "url": "https://this-site-does-not-exist-at-all.invalid",
-    "icon": "https://icons.duckduckgo.com/ip3/this-site-does-not-exist-at-all.invalid.ico",
-    "slug": "test-down",
-    "status": "down",
-    "uptime": "100.00%",
-    "uptimeDay": "100.00%",
-    "uptimeWeek": "100.00%",
-    "uptimeMonth": "100.00%",
-    "uptimeYear": "100.00%",
-    "time": 0,
-    "timeDay": 0,
-    "timeWeek": 0,
-    "timeMonth": 0,
-    "timeYear": 0,
-    "dailyMinutesDown": {}
   }
 ]
