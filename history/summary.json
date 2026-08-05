@@ -4,20 +4,20 @@
     "url": "https://qwq.tail6e5b10.ts.net",
     "icon": "https://icons.duckduckgo.com/ip3/qwq.tail6e5b10.ts.net.ico",
     "slug": "mac-vm",
-    "status": "down",
-    "uptime": "78.36%",
-    "uptimeDay": "67.99%",
-    "uptimeWeek": "78.36%",
-    "uptimeMonth": "78.36%",
-    "uptimeYear": "78.36%",
-    "time": 6824,
-    "timeDay": 4670,
-    "timeWeek": 6824,
-    "timeMonth": 6824,
-    "timeYear": 6824,
+    "status": "up",
+    "uptime": "78.17%",
+    "uptimeDay": "67.60%",
+    "uptimeWeek": "78.17%",
+    "uptimeMonth": "78.17%",
+    "uptimeYear": "78.17%",
+    "time": 6766,
+    "timeDay": 4986,
+    "timeWeek": 6766,
+    "timeMonth": 6766,
+    "timeYear": 6766,
     "dailyMinutesDown": {
       "2026-08-04": 297,
-      "2026-08-05": 205
+      "2026-08-05": 211
     }
   }
 ]
