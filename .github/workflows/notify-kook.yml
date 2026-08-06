@@ -16,6 +16,7 @@ jobs:
         env:
           KOOK_TOKEN: ${{ secrets.KOOK_TOKEN }}
           KOOK_CHANNEL: "1010983873136793"
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           python3 - <<'PY'
           import os, json, subprocess, urllib.request
