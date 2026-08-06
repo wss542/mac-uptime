@@ -1,0 +1,68 @@
+name: Notify KOOK on downtime
+
+on:
+  issues:
+    types: [opened]
+
+permissions: {}
+
+jobs:
+  notify-kook:
+    if: >-
+      contains(github.event.issue.title, 'is down') ||
+      contains(github.event.issue.body, 'is down')
+    runs-on: ubuntu-latest
+    steps:
+      - name: Post downtime alert to KOOK
+        env:
+          KOOK_TOKEN: ${{ secrets.KOOK_TOKEN }}
+          KOOK_CHANNEL: "1010983873136793"
+          ISSUE_TITLE: ${{ github.event.issue.title }}
+          ISSUE_BODY: ${{ github.event.issue.body }}
+          ISSUE_URL: ${{ github.event.issue.html_url }}
+        run: |
+          python3 - <<'PY'
+          import os, json, urllib.request
+
+          token = os.environ["KOOK_TOKEN"]
+          channel = os.environ["KOOK_CHANNEL"]
+          title = os.environ.get("ISSUE_TITLE", "")
+          body = os.environ.get("ISSUE_BODY", "")
+          url = os.environ.get("ISSUE_URL", "")
+
+          body_snip = ""
+          for line in body.splitlines():
+              line = line.strip()
+              if line:
+                  body_snip = line[:400]
+                  break
+
+          msg = (
+              "# ⚠️ 服务宕机告警 (Mac VM Uptime)\n"
+              f"**{title}**\n\n"
+              f"{body_snip}\n\n"
+              f"[在 GitHub 查看详情]({url})"
+          )
+
+          payload = {
+              "target_id": channel,
+              "content": msg,
+              "type": 9,
+          }
+          data = json.dumps(payload).encode("utf-8")
+          req = urllib.request.Request(
+              "https://www.kookapp.com/api/v3/message/create",
+              data=data,
+              headers={
+                  "Authorization": "Bot " + token,
+                  "Content-Type": "application/json",
+              },
+              method="POST",
+          )
+          try:
+              resp = urllib.request.urlopen(req, timeout=15)
+              print("KOOK resp:", resp.read().decode("utf-8")[:300])
+          except Exception as e:
+              print("KOOK send failed:", e)
+              raise
+          PY
