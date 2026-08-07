@@ -24,33 +24,47 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           python3 - <<'PY'
-          import os, json, subprocess, urllib.request
+          import os, json, urllib.request, sys
 
           token = os.environ["KOOK_TOKEN"]
+          gh = os.environ["GH_TOKEN"]
           channel = os.environ["KOOK_CHANNEL"]
           api = os.environ["KOOK_API"]
           repo = "wss542/mac-uptime"
 
-          def gh_list():
-              r = subprocess.run(
-                  ["gh", "issue", "list", "--repo", repo, "--state", "all",
-                   "--json", "number,title,state,labels,url"],
-                  capture_output=True, text=True)
-              if r.returncode != 0:
-                  print("gh err:", r.stderr)
-                  return []
-              return json.loads(r.stdout)
+          def gh_api(method, path, body=None):
+              url = f"https://api.github.com/repos/{repo}{path}"
+              data = json.dumps(body).encode() if body is not None else None
+              req = urllib.request.Request(url, data=data,
+                  headers={"Authorization": f"Bearer {gh}",
+                           "Accept": "application/vnd.github.v3+json",
+                           "Content-Type": "application/json"}, method=method)
+              try:
+                  r = urllib.request.urlopen(req, timeout=20)
+                  return json.loads(r.read().decode())
+              except urllib.error.HTTPError as e:
+                  print("GH API err:", e.code, e.read().decode()[:300])
+                  raise
+
+          def list_issues():
+              out, page = [], 1
+              while True:
+                  iss = gh_api("GET", f"/issues?state=all&per_page=100&page={page}")
+                  if not iss:
+                      break
+                  out += iss
+                  page += 1
+                  if len(iss) < 100:
+                      break
+              return out
 
           def post_kook(title, url):
               msg = (f"# ⚠️ 服务宕机告警 (Mac VM Uptime)\n**{title}**\n\n"
                      f"[在 GitHub 查看详情]({url})")
               payload = {"target_id": channel, "content": msg, "type": 9}
-              req = urllib.request.Request(
-                  api,
-                  data=json.dumps(payload).encode(),
+              req = urllib.request.Request(api, data=json.dumps(payload).encode(),
                   headers={"Authorization": "Bot " + token,
-                           "Content-Type": "application/json"},
-                  method="POST")
+                           "Content-Type": "application/json"}, method="POST")
               try:
                   resp = urllib.request.urlopen(req, timeout=15).read().decode()
                   print("KOOK resp:", resp[:200])
@@ -58,29 +72,33 @@ jobs:
                   print("KOOK send failed:", e)
                   raise
 
-          def label(num, action, name):
-              subprocess.run(
-                  ["gh", "issue", "edit", str(num), "--repo", repo,
-                   action, name], capture_output=True, text=True)
+          def add_label(num, name):
+              gh_api("POST", f"/issues/{num}/labels", [name])
 
-          for it in gh_list():
+          def remove_label(num, name):
+              gh_api("DELETE", f"/issues/{num}/labels/{name}")
+
+          for it in list_issues():
+              if "pull_request" in it:
+                  continue
               t = it["title"].lower()
               if "is down" not in t and "is reachable" not in t:
                   continue
-              labels = [l["name"] for l in it["labels"]]
+              labels = [l["name"] for l in it.get("labels", [])]
               num = it["number"]
+              print(f"scan #{num} state={it['state']} labels={labels}")
               if it["state"] == "open":
                   if "kook-alerted" in labels:
                       continue
                   post_kook(it["title"], it["url"])
-                  label(num, "--add-label", "kook-alerted")
+                  add_label(num, "kook-alerted")
                   print(f"alerted issue #{num}")
-              else:  # closed = recovered
+              else:
                   if "kook-alerted" in labels:
                       recovered = it["title"].replace("is down", "已恢复")
                       post_kook("✅ " + recovered, it["url"])
-                      label(num, "--remove-label", "kook-alerted")
-                      label(num, "--add-label", "kook-recovered")
+                      remove_label(num, "kook-alerted")
+                      add_label(num, "kook-recovered")
                       print(f"recovered issue #{num}")
           print("done")
           PY
