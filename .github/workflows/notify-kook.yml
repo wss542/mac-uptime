@@ -1,9 +1,13 @@
 name: Notify KOOK on downtime
 
 on:
-  schedule:
-    - cron: "*/5 * * * *"
+  repository_dispatch:
+    types: [uptime]
   workflow_dispatch:
+
+concurrency:
+  group: notify-kook-${{ github.ref }}
+  cancel-in-progress: false
 
 permissions:
   issues: write
@@ -16,6 +20,7 @@ jobs:
         env:
           KOOK_TOKEN: ${{ secrets.KOOK_TOKEN }}
           KOOK_CHANNEL: "1010983873136793"
+          KOOK_API: "https://www.kookapp.cn/api/v3/message/create"
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           python3 - <<'PY'
@@ -23,6 +28,7 @@ jobs:
 
           token = os.environ["KOOK_TOKEN"]
           channel = os.environ["KOOK_CHANNEL"]
+          api = os.environ["KOOK_API"]
           repo = "wss542/mac-uptime"
 
           def gh_list():
@@ -40,7 +46,7 @@ jobs:
                      f"[在 GitHub 查看详情]({url})")
               payload = {"target_id": channel, "content": msg, "type": 9}
               req = urllib.request.Request(
-                  "https://www.kookapp.com/api/v3/message/create",
+                  api,
                   data=json.dumps(payload).encode(),
                   headers={"Authorization": "Bot " + token,
                            "Content-Type": "application/json"},
