@@ -2,15 +2,15 @@ owner: wss542
 repo: mac-uptime
 
 sites:
-  - name: Mac VM
-    url: https://qwq.tail6e5b10.ts.net
+  - name: Ubuntu VM
+    url: https://huanmeng-vm.python-wrasse.ts.net
 
 assignees:
   - wss542
 
 status-website:
-  name: Mac VM Status
-  introTitle: Mac VM Uptime Monitor
+  name: Ubuntu VM Status
+  introTitle: Ubuntu VM Uptime Monitor
   introMessage: Powered by Upptime + Tailscale Funnel
   navbar:
     - title: Status
