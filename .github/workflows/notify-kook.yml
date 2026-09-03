@@ -24,11 +24,17 @@ jobs:
           python3 - <<'PY'
           import os, json, urllib.request, urllib.error, subprocess
 
-          token = os.environ["KOOK_TOKEN"]
-          channel = os.environ["KOOK_CHANNEL"]
-          url = os.environ["TARGET_URL"]
+          # 取 token，并防御性剥掉可能多粘的 "KOOK_TOKEN=" 前缀与首尾空白
+          raw = os.environ.get("KOOK_TOKEN", "")
+          token = raw.strip()
+          if token.startswith("KOOK_TOKEN="):
+              token = token[len("KOOK_TOKEN="):].strip()
+          channel = os.environ["KOOK_CHANNEL"].strip()
+          url = os.environ["TARGET_URL"].strip()
           state_file = ".kook_alert_state"
           manual = os.environ.get("GITHUB_EVENT_NAME") == "workflow_dispatch"
+
+          print(f"[debug] token loaded, len={len(token)}, channel={channel}")
 
           def post_kook(content):
               payload = {"target_id": channel, "content": content, "type": 9}
@@ -39,7 +45,11 @@ jobs:
                            "Content-Type": "application/json"}, method="POST")
               try:
                   resp = urllib.request.urlopen(req, timeout=15).read().decode()
-                  print("KOOK resp:", resp[:200])
+                  print("KOOK resp:", resp[:300])
+                  data = json.loads(resp)
+                  if data.get("code") != 0:
+                      print("KOOK 返回错误:", data.get("code"), data.get("message"))
+                      return False
                   return True
               except Exception as e:
                   print("KOOK send failed:", e)
@@ -47,7 +57,10 @@ jobs:
 
           # 手动触发：永远发一条自检，方便验证链路
           if manual:
-              post_kook("# 🔔 自检测试\n告警链路正常，KOOK 推送可达。\n（这是手动运行工作流产生的测试消息）")
+              ok = post_kook("# 🔔 自检测试\n告警链路正常，KOOK 推送可达。\n（这是手动运行工作流产生的测试消息）")
+              if not ok:
+                  print("ERROR: 自检消息发送失败，工作流标记为失败")
+                  raise SystemExit(1)
               print("manual test sent")
               raise SystemExit(0)
 
@@ -67,11 +80,13 @@ jobs:
 
           changed = False
           if current == "down" and prev != "down":
-              post_kook("# ⚠️ 服务宕机告警\n**Ubuntu VM 不可达**\n\n探测地址：" + url)
+              if not post_kook("# ⚠️ 服务宕机告警\n**Ubuntu VM 不可达**\n\n探测地址：" + url):
+                  raise SystemExit(1)
               open(state_file, "w").write("down")
               changed = True
           elif current == "up" and prev == "down":
-              post_kook("# ✅ 服务已恢复\n**Ubuntu VM 恢复正常**\n\n探测地址：" + url)
+              if not post_kook("# ✅ 服务已恢复\n**Ubuntu VM 恢复正常**\n\n探测地址：" + url):
+                  raise SystemExit(1)
               open(state_file, "w").write("up")
               changed = True
           else:
