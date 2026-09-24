@@ -23,6 +23,7 @@ jobs:
         run: |
           python3 - <<'PY'
           import os, json, urllib.request, urllib.error, subprocess
+          from datetime import datetime, timezone, timedelta
 
           # 取 token，并防御性剥掉可能多粘的 "KOOK_TOKEN=" 前缀与首尾空白
           raw = os.environ.get("KOOK_TOKEN", "")
@@ -31,8 +32,23 @@ jobs:
               token = token[len("KOOK_TOKEN="):].strip()
           channel = os.environ["KOOK_CHANNEL"].strip()
           url = os.environ["TARGET_URL"].strip()
-          state_file = ".kook_alert_state"
+          state_file = ".kook_alert_state"        # 只放 "up" / "down"
+          ts_file = ".kook_down_since"            # 掉线开始的 unix 时间戳
           manual = os.environ.get("GITHUB_EVENT_NAME") == "workflow_dispatch"
+          CN = timezone(timedelta(hours=8))       # 北京时间
+
+          def now_cn():
+              return datetime.now(CN).strftime("%Y-%m-%d %H:%M:%S")
+
+          def fmt_duration(seconds):
+              seconds = int(max(0, seconds))
+              h, rem = divmod(seconds, 3600)
+              m, s = divmod(rem, 60)
+              if h:
+                  return f"{h} 小时 {m} 分 {s} 秒"
+              if m:
+                  return f"{m} 分 {s} 秒"
+              return f"{s} 秒"
 
           print(f"[debug] token loaded, len={len(token)}, channel={channel}")
 
@@ -57,7 +73,8 @@ jobs:
 
           # 手动触发：永远发一条自检，方便验证链路
           if manual:
-              ok = post_kook("# 🔔 自检测试\n告警链路正常，KOOK 推送可达。\n（这是手动运行工作流产生的测试消息）")
+              ok = post_kook("# 🔔 自检测试\n告警链路正常，KOOK 推送可达。\n"
+                             f"探测地址：{url}\n触发时间：{now_cn()}")
               if not ok:
                   print("ERROR: 自检消息发送失败，工作流标记为失败")
                   raise SystemExit(1)
@@ -66,11 +83,13 @@ jobs:
 
           # 调度触发：主动探测 VM
           ok = False
+          err_detail = ""
           try:
               r = urllib.request.urlopen(url, timeout=15)
               ok = (r.status == 200)
           except Exception as e:
               ok = False
+              err_detail = str(e)
               print("probe error:", e)
           current = "up" if ok else "down"
           prev = "up"
@@ -80,21 +99,46 @@ jobs:
 
           changed = False
           if current == "down" and prev != "down":
-              if not post_kook("# ⚠️ 服务宕机告警\n**Ubuntu VM 不可达**\n\n探测地址：" + url):
+              ts = int(datetime.now(timezone.utc).timestamp())
+              body = ("# ⚠️ 服务宕机告警\n"
+                      "**Ubuntu VM 不可达**\n\n"
+                      f"掉线开始：{now_cn()}\n"
+                      f"探测地址：{url}")
+              if err_detail:
+                  body += f"\n失败原因：{err_detail[:150]}"
+              if not post_kook(body):
                   raise SystemExit(1)
               open(state_file, "w").write("down")
+              open(ts_file, "w").write(str(ts))
               changed = True
           elif current == "up" and prev == "down":
-              if not post_kook("# ✅ 服务已恢复\n**Ubuntu VM 恢复正常**\n\n探测地址：" + url):
+              down_ts = 0
+              try:
+                  if os.path.exists(ts_file):
+                      down_ts = int(open(ts_file).read().strip() or 0)
+              except Exception:
+                  down_ts = 0
+              now_ts = int(datetime.now(timezone.utc).timestamp())
+              body = ("# ✅ 服务已恢复\n"
+                      "**Ubuntu VM 恢复正常**\n\n"
+                      f"恢复时间：{now_cn()}")
+              if down_ts > 0:
+                  start_cn = datetime.fromtimestamp(down_ts, CN).strftime("%Y-%m-%d %H:%M:%S")
+                  body += (f"\n掉线期间：{start_cn} ~ {now_cn()}"
+                           f"\n本次中断时长：{fmt_duration(now_ts - down_ts)}")
+              body += f"\n探测地址：{url}"
+              if not post_kook(body):
                   raise SystemExit(1)
               open(state_file, "w").write("up")
+              if os.path.exists(ts_file):
+                  os.remove(ts_file)
               changed = True
           else:
               print("状态未变化，不推送")
               raise SystemExit(0)
 
           if changed:
-              subprocess.run(["git", "add", state_file], check=False)
+              subprocess.run(["git", "add", "-A"], check=False)
               subprocess.run(["git", "config", "user.email", "bot@github.com"], check=False)
               subprocess.run(["git", "config", "user.name", "github-actions"], check=False)
               subprocess.run(["git", "commit", "-m", "chore: update alert state"], check=False)
