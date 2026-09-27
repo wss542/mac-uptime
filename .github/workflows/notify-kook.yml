@@ -81,21 +81,61 @@ jobs:
               print("manual test sent")
               raise SystemExit(0)
 
-          # 调度触发：主动探测 VM
+          # 调度触发：主动探测 VM（多点重试，抗跨境抖动）
+          # ⚠️ 5xx / 超时 都不等于「VM 宕机」—— 可能只是 Cloudflare/Funnel 瞬时抖动。
+          # 策略：每周期最多探 3 次，任一拿到 200 即判 up。
+          def probe_once():
+              """返回 (ok, detail)，ok=True 表示 HTTP 200。"""
+              try:
+                  r = urllib.request.urlopen(url, timeout=25)
+                  if r.status == 200:
+                      r.read(64)
+                      return True, "200"
+                  return False, "HTTP %s" % r.status
+              except urllib.error.HTTPError as e:
+                  return False, "HTTP %s" % e.code
+              except Exception as e:
+                  return False, "%s: %s" % (type(e).__name__, str(e)[:120])
+
           ok = False
           err_detail = ""
-          try:
-              r = urllib.request.urlopen(url, timeout=15)
-              ok = (r.status == 200)
-          except Exception as e:
-              ok = False
-              err_detail = str(e)
-              print("probe error:", e)
+          attempts = 3
+          for i in range(attempts):
+              ok, err_detail = probe_once()
+              print(f"[probe {i+1}/{attempts}] ok={ok} detail={err_detail}")
+              if ok:
+                  break
+              if i < attempts - 1:
+                  import time as _t
+                  _t.sleep(5)
+
           current = "up" if ok else "down"
+
+          # 迟滞：连续 2 个周期都失败才判 down（防单次抖动误报）
+          fail_file = ".kook_probe_fail_count"
+          prev_fail = 0
+          if os.path.exists(fail_file):
+              try:
+                  prev_fail = int(open(fail_file).read().strip() or 0)
+              except Exception:
+                  prev_fail = 0
+          if current == "down":
+              fail_count = prev_fail + 1
+              open(fail_file, "w").write(str(fail_count))
+          else:
+              fail_count = 0
+              open(fail_file, "w").write("0")
+          print(f"fail_count={fail_count} (need >=2 to alert)")
+
           prev = "up"
           if os.path.exists(state_file):
               prev = (open(state_file).read().strip() or "up")
           print(f"prev={prev} current={current}")
+
+          # 未达迟滞阈值 → 按 up 处理，不告警、不改状态
+          if current == "down" and fail_count < 2:
+              print("单次探测失败但未达迟滞阈值(2)，按 up 处理，不告警")
+              raise SystemExit(0)
 
           changed = False
           if current == "down" and prev != "down":
@@ -103,7 +143,8 @@ jobs:
               body = ("# ⚠️ 服务宕机告警\n"
                       "**Ubuntu VM 不可达**\n\n"
                       f"掉线开始：{now_cn()}\n"
-                      f"探测地址：{url}")
+                      f"探测地址：{url}\n"
+                      f"已连续 {fail_count} 个周期探测失败（每周期重试 {attempts} 次）")
               if err_detail:
                   body += f"\n失败原因：{err_detail[:150]}"
               if not post_kook(body):
@@ -132,6 +173,8 @@ jobs:
               open(state_file, "w").write("up")
               if os.path.exists(ts_file):
                   os.remove(ts_file)
+              if os.path.exists(fail_file):
+                  open(fail_file, "w").write("0")
               changed = True
           else:
               print("状态未变化，不推送")
