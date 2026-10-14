@@ -5,14 +5,14 @@
     "icon": "https://icons.duckduckgo.com/ip3/huanmeng-vm.python-wrasse.ts.net.ico",
     "slug": "ubuntu-vm",
     "status": "down",
-    "uptime": "33.24%",
+    "uptime": "32.49%",
     "uptimeDay": "0.00%",
-    "uptimeWeek": "40.78%",
+    "uptimeWeek": "27.68%",
     "uptimeMonth": "44.26%",
-    "uptimeYear": "33.24%",
+    "uptimeYear": "32.49%",
     "time": 1416,
     "timeDay": 0,
-    "timeWeek": 1485,
+    "timeWeek": 1711,
     "timeMonth": 1416,
     "timeYear": 1416,
     "dailyMinutesDown": {
@@ -46,7 +46,8 @@
       "2026-10-10": 1440,
       "2026-10-09": 1440,
       "2026-10-08": 1290,
-      "2026-10-13": 389,
+      "2026-10-14": 270,
+      "2026-10-13": 1440,
       "2026-10-12": 1317
     }
   }
